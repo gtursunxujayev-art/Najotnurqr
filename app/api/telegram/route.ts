@@ -11,17 +11,12 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-/**
- * Helper: duplicate bo'lsa ham userni qaytaradi
- */
 async function getOrCreateUser(telegramId: number, username: string | null) {
-  // Avval borini izlaymiz
   let existing = await prisma.user.findUnique({
     where: { telegramId }
   });
   if (existing) return existing;
 
-  // Yo'q bo'lsa – yaratishga harakat qilamiz
   try {
     const created = await prisma.user.create({
       data: {
@@ -35,22 +30,27 @@ async function getOrCreateUser(telegramId: number, username: string | null) {
     });
     return created;
   } catch (err: any) {
-    // Agar shu payt boshqa request yaratib bo'lsa (P2002) – qayta o'qiymiz
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === 'P2002'
     ) {
-      const again = await prisma.user.findUnique({
-        where: { telegramId }
-      });
+      const again = await prisma.user.findUnique({ where: { telegramId } });
       if (again) return again;
     }
     throw err;
   }
 }
 
+async function getBotSettings() {
+  const settings = await prisma.botSettings.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {}
+  });
+  return settings;
+}
+
 export async function POST(req: NextRequest) {
-  // 1) Update ni parse qilish
   let update: any;
   try {
     update = await req.json();
@@ -75,12 +75,14 @@ export async function POST(req: NextRequest) {
   const chatId: number = chat.id;
   const telegramId: number = from.id;
   const username: string | null = from.username ?? null;
-  const textRaw: string = typeof message.text === 'string' ? message.text.trim() : '';
+  const textRaw: string =
+    typeof message.text === 'string' ? message.text.trim() : '';
 
   try {
-    // =====================================================
-    // /start → har doim flow boshlanishini tozalaydi
-    // =====================================================
+    // Load settings (texts)
+    const settings = await getBotSettings();
+
+    // /start → reset flow
     if (textRaw === '/start') {
       let user = await prisma.user.findUnique({ where: { telegramId } });
 
@@ -108,19 +110,14 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      await sendTelegramMessage(
-        chatId,
-        "Assalomu alaykum! Ismingizni kiriting (faqat matn):"
-      );
+      await sendTelegramMessage(chatId, settings.greetingText);
       return NextResponse.json({ ok: true });
     }
 
-    // =====================================================
-    // Userni olish / yaratish (parallel requestlarga chidamli)
-    // =====================================================
+    // Ensure user exists (race-safe)
     let user = await getOrCreateUser(telegramId, username);
 
-    // Username o'zgargan bo'lsa – yangilab qo'yamiz (lekin xatoga sabab bo'lmaydi)
+    // Update username if changed (non-critical)
     if (user.username !== username) {
       try {
         user = await prisma.user.update({
@@ -134,30 +131,22 @@ export async function POST(req: NextRequest) {
 
     const text = textRaw;
 
-    // Agar text bo'lmasa (sticker, foto, contact) – izoh berib, stepni o'zgartirmaymiz
     if (!text) {
       await sendTelegramMessage(
         chatId,
-        'Iltimos, faqat matn yuboring. Boshlash uchun /start, yoki davom ettirish uchun matn kiriting.'
+        'Iltimos, faqat matn yuboring. Boshlash uchun /start yuboring.'
       );
       return NextResponse.json({ ok: true });
     }
 
-    // =====================================================
-    // Step-by-step flow
-    // =====================================================
     switch (user.step) {
       case 'ASK_NAME': {
-        // Juda uzun bo'lsa ham xatoga olib kelmaydi, faqat biroz kesish mumkin edi – hozircha to'g'ridan yozamiz
         user = await prisma.user.update({
           where: { id: user.id },
           data: { name: text, step: 'ASK_PHONE' }
         });
 
-        await sendTelegramMessage(
-          chatId,
-          "Telefon raqamingizni kiriting (masalan: +99890xxxxxxx, faqat matn):"
-        );
+        await sendTelegramMessage(chatId, settings.askPhoneText);
         break;
       }
 
@@ -167,10 +156,7 @@ export async function POST(req: NextRequest) {
           data: { phone: text, step: 'ASK_JOB' }
         });
 
-        await sendTelegramMessage(
-          chatId,
-          'Kasbingiz yoki nima ish qilishingizni yozing:'
-        );
+        await sendTelegramMessage(chatId, settings.askJobText);
         break;
       }
 
@@ -180,8 +166,6 @@ export async function POST(req: NextRequest) {
           data: { job: text, step: 'DONE' }
         });
 
-        // Google Sheets + skaner uchun ideal format:
-        // Faqat bitta qator, vergul bilan ajratilgan
         const qrText = `${user.name},${user.phone}`;
         const qrUrl = buildQrUrl(qrText);
 
