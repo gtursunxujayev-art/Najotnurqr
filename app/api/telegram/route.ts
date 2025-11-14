@@ -152,3 +152,40 @@ export async function POST(req: NextRequest) {
 
         await sendTelegramMessage(
           chatId,
+          'Rahmat! Mana sizning QR-kodingiz:'
+        );
+        await sendTelegramPhoto(
+          chatId,
+          qrUrl,
+          `QR ichidagi ma'lumot: ${user.name} | ${user.phone}`
+        );
+        break;
+      }
+
+      case 'DONE': {
+        await sendTelegramMessage(
+          chatId,
+          "Siz allaqachon roʻyxatdan oʻtgansiz. Qayta boshlash uchun /start yuboring."
+        );
+        break;
+      }
+
+      default: {
+        await sendTelegramMessage(
+          chatId,
+          'Boshlash uchun /start buyrugʻini yuboring.'
+        );
+      }
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error('Prisma / bot logic error:', err);
+    // VERY IMPORTANT: still answer user (so you see there WAS an error)
+    await sendTelegramMessage(
+      chatId,
+      "Serverda xatolik yuz berdi 😔 Iltimos, birozdan so'ng qayta urinib ko'ring."
+    );
+    return NextResponse.json({ ok: true });
+  }
+}
