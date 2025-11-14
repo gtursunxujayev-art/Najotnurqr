@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
 
         // 👇 HERE we change QR content to simple text
         // Variant 1: two lines with labels (recommended)
-        const qrText = `NAME: ${user.name}\nPHONE: ${user.phone}`;
+        const qrText = `${user.name},${user.phone}`;
 
         // If you prefer comma for Google Sheets, use this instead:
         // const qrText = `${user.name},${user.phone}`;
