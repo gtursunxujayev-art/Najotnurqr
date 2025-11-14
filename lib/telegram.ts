@@ -69,7 +69,7 @@ export async function sendTelegramPhoto(
  * Encodes provided text into QR image URL
  */
 export function buildQrUrl(text: string) {
-  return `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(
+  return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&margin=20&ecc=L&data=${encodeURIComponent(
     text
   )}`;
 }
