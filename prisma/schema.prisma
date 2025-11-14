@@ -16,7 +16,7 @@ enum Step {
 
 model User {
   id         Int      @id @default(autoincrement())
-  telegramId Int      @unique
+  telegramId BigInt   @unique
   username   String?
   name       String
   phone      String
@@ -27,8 +27,8 @@ model User {
 }
 
 model BotSettings {
-  id            Int    @id @default(1)
-  greetingText  String @default("Assalomu alaykum! Ismingizni kiriting:")
-  askPhoneText  String @default("Telefon raqamingizni kiriting (masalan: +99890xxxxxxx):")
-  askJobText    String @default("Kasbingiz yoki nima ish qilishingizni yozing:")
+  id           Int    @id @default(1)
+  greetingText String @default("Assalomu alaykum! Ismingizni kiriting:")
+  askPhoneText String @default("Telefon raqamingizni kiriting (masalan: +99890xxxxxxx):")
+  askJobText   String @default("Kasbingiz yoki nima ish qilishingizni yozing:")
 }
