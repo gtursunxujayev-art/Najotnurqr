@@ -1,35 +1,53 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { buildQrUrl, sendTelegramMessage, sendTelegramPhoto } from '@/lib/telegram';
+import {
+  buildQrUrl,
+  sendTelegramMessage,
+  sendTelegramPhoto
+} from '@/lib/telegram';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export async function POST(req: NextRequest) {
+  // 1) Parse update & basic fields FIRST (no Prisma here)
+  let update: any;
   try {
-    const update = await req.json();
-    console.log('Telegram update:', JSON.stringify(update, null, 2));
+    update = await req.json();
+  } catch (e) {
+    console.error('Failed to parse Telegram update JSON:', e);
+    return NextResponse.json({ ok: true });
+  }
 
-    const message = update.message ?? update.edited_message;
-    if (!message) return NextResponse.json({ ok: true });
+  console.log('Telegram update:', JSON.stringify(update, null, 2));
 
-    const chat = message.chat;
-    const from = message.from;
+  const message = update.message ?? update.edited_message;
+  if (!message) {
+    // Ignore non-message updates
+    return NextResponse.json({ ok: true });
+  }
 
-    if (!chat || !from) {
-      console.log('Missing chat/from');
-      return NextResponse.json({ ok: true });
-    }
+  const chat = message.chat;
+  const from = message.from;
 
-    const chatId = chat.id;
-    const telegramId = from.id;
-    const username = from.username ?? null;
-    const textRaw = (message.text ?? '').trim();
+  if (!chat || !from || !chat.id) {
+    console.log('Missing chat or from in update');
+    return NextResponse.json({ ok: true });
+  }
 
-    // /start → reset flow
+  const chatId: number = chat.id;
+  const telegramId: number = from.id;
+  const username: string | null = from.username ?? null;
+  const textRaw: string = (message.text ?? '').trim();
+
+  // 2) Now Prisma + business logic WITHIN a try/catch
+  try {
+    // --- /start: reset flow ---
     if (textRaw === '/start') {
-      let user = await prisma.user.findUnique({ where: { telegramId } });
+      let user = await prisma.user.findUnique({
+        where: { telegramId }
+      });
 
       if (!user) {
         user = await prisma.user.create({
@@ -55,12 +73,17 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      await sendTelegramMessage(chatId, "Assalomu alaykum! Ismingizni kiriting:");
+      await sendTelegramMessage(
+        chatId,
+        "Assalomu alaykum! Ismingizni kiriting:"
+      );
       return NextResponse.json({ ok: true });
     }
 
-    // ensure user exists
-    let user = await prisma.user.findUnique({ where: { telegramId } });
+    // --- ensure user exists ---
+    let user = await prisma.user.findUnique({
+      where: { telegramId }
+    });
 
     if (!user) {
       user = await prisma.user.create({
@@ -74,10 +97,14 @@ export async function POST(req: NextRequest) {
         }
       });
 
-      await sendTelegramMessage(chatId, "Assalomu alaykum! Ismingizni kiriting:");
+      await sendTelegramMessage(
+        chatId,
+        "Assalomu alaykum! Ismingizni kiriting:"
+      );
       return NextResponse.json({ ok: true });
     }
 
+    // keep username fresh
     if (user.username !== username) {
       await prisma.user.update({
         where: { id: user.id },
@@ -109,7 +136,7 @@ export async function POST(req: NextRequest) {
 
         await sendTelegramMessage(
           chatId,
-          "Kasbingiz yoki nima ish qilishingizni yozing:"
+          'Kasbingiz yoki nima ish qilishingizni yozing:'
         );
         break;
       }
@@ -123,34 +150,5 @@ export async function POST(req: NextRequest) {
         const qrText = `${user.name} | ${user.phone}`;
         const qrUrl = buildQrUrl(qrText);
 
-        await sendTelegramMessage(chatId, "Rahmat! Mana sizning QR-kodingiz:");
-        await sendTelegramPhoto(
-          chatId,
-          qrUrl,
-          `QR ichidagi ma'lumot: ${user.name} | ${user.phone}`
-        );
-        break;
-      }
-
-      case 'DONE': {
         await sendTelegramMessage(
           chatId,
-          "Siz allaqachon roʻyxatdan oʻtgansiz. Qayta boshlash uchun /start yuboring."
-        );
-        break;
-      }
-
-      default: {
-        await sendTelegramMessage(
-          chatId,
-          "Boshlash uchun /start buyrugʻini yuboring."
-        );
-      }
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    console.error('Telegram webhook error:', err);
-    return NextResponse.json({ ok: true });
-  }
-}
