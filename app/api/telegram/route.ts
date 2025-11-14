@@ -198,12 +198,22 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true });
-  } catch (err) {
+    } catch (err: any) {
     console.error('Prisma / bot logic error:', err);
+
+    // Extract short debug info
+    const code = err?.code || 'NO_CODE';
+    const msg =
+      typeof err?.message === 'string'
+        ? err.message.slice(0, 120)
+        : 'NO_MESSAGE';
+
     await sendTelegramMessage(
       chatId,
-      "Serverda xatolik yuz berdi 😔 Iltimos, birozdan so'ng qayta urinib ko'ring."
+      "Serverda xatolik yuz berdi 😔 Iltimos, birozdan so'ng qayta urinib ko'ring.\n\n" +
+        `Tech info: ${code} | ${msg}`
     );
+
     return NextResponse.json({ ok: true });
   }
 }
