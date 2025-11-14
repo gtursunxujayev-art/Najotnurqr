@@ -11,7 +11,7 @@ export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
 export async function POST(req: NextRequest) {
-  // 1) Parse update & basic fields FIRST (no Prisma here)
+  // 1) Parse update
   let update: any;
   try {
     update = await req.json();
@@ -23,10 +23,7 @@ export async function POST(req: NextRequest) {
   console.log('Telegram update:', JSON.stringify(update, null, 2));
 
   const message = update.message ?? update.edited_message;
-  if (!message) {
-    // Ignore non-message updates
-    return NextResponse.json({ ok: true });
-  }
+  if (!message) return NextResponse.json({ ok: true });
 
   const chat = message.chat;
   const from = message.from;
@@ -41,13 +38,10 @@ export async function POST(req: NextRequest) {
   const username: string | null = from.username ?? null;
   const textRaw: string = (message.text ?? '').trim();
 
-  // 2) Now Prisma + business logic WITHIN a try/catch
   try {
-    // --- /start: reset flow ---
+    // /start → reset flow
     if (textRaw === '/start') {
-      let user = await prisma.user.findUnique({
-        where: { telegramId }
-      });
+      let user = await prisma.user.findUnique({ where: { telegramId } });
 
       if (!user) {
         user = await prisma.user.create({
@@ -80,10 +74,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // --- ensure user exists ---
-    let user = await prisma.user.findUnique({
-      where: { telegramId }
-    });
+    // Ensure user exists
+    let user = await prisma.user.findUnique({ where: { telegramId } });
 
     if (!user) {
       user = await prisma.user.create({
@@ -104,7 +96,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // keep username fresh
+    // keep username up to date
     if (user.username !== username) {
       await prisma.user.update({
         where: { id: user.id },
@@ -147,7 +139,13 @@ export async function POST(req: NextRequest) {
           data: { job: text, step: 'DONE' }
         });
 
-        const qrText = `${user.name} | ${user.phone}`;
+        // 👇 HERE we change QR content to simple text
+        // Variant 1: two lines with labels (recommended)
+        const qrText = `NAME: ${user.name}\nPHONE: ${user.phone}`;
+
+        // If you prefer comma for Google Sheets, use this instead:
+        // const qrText = `${user.name},${user.phone}`;
+
         const qrUrl = buildQrUrl(qrText);
 
         await sendTelegramMessage(
@@ -157,7 +155,7 @@ export async function POST(req: NextRequest) {
         await sendTelegramPhoto(
           chatId,
           qrUrl,
-          `QR ichidagi ma'lumot: ${user.name} | ${user.phone}`
+          `QR ichidagi matn:\n${qrText}`
         );
         break;
       }
@@ -181,7 +179,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error('Prisma / bot logic error:', err);
-    // VERY IMPORTANT: still answer user (so you see there WAS an error)
     await sendTelegramMessage(
       chatId,
       "Serverda xatolik yuz berdi 😔 Iltimos, birozdan so'ng qayta urinib ko'ring."
