@@ -3,6 +3,8 @@ import { prisma } from '@/lib/prisma';
 import { sendTelegramMessage } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -24,11 +26,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  if (userIds.length === 0) {
+    return NextResponse.json(
+      { error: 'No users selected' },
+      { status: 400 }
+    );
+  }
+
   const users = await prisma.user.findMany({
     where: { id: { in: userIds } }
   });
 
-  // Fire-and-forget sending
   await Promise.all(
     users.map((u) =>
       sendTelegramMessage(u.telegramId, text).catch((err) => {
