@@ -11,17 +11,29 @@ type User = {
   createdAt: string;
 };
 
+type BotSettings = {
+  greetingText: string;
+  askPhoneText: string;
+  askJobText: string;
+};
+
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+
+  const [settings, setSettings] = useState<BotSettings | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
   const fetchUsers = async () => {
-    setLoading(true);
+    setLoadingUsers(true);
     setError(null);
     try {
       const res = await fetch('/api/admin/users');
@@ -31,12 +43,28 @@ export default function AdminPage() {
       console.error(e);
       setError('Cannot load users');
     } finally {
-      setLoading(false);
+      setLoadingUsers(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/admin/settings');
+      const data: BotSettings = await res.json();
+      setSettings(data);
+    } catch (e) {
+      console.error(e);
+      setError('Cannot load bot messages settings');
+    } finally {
+      setSettingsLoading(false);
     }
   };
 
   useEffect(() => {
     fetchUsers();
+    fetchSettings();
   }, []);
 
   const toggleSelect = (id: number) => {
@@ -93,6 +121,32 @@ export default function AdminPage() {
     window.location.href = '/api/admin/export';
   };
 
+  const handleSaveSettings = async () => {
+    if (!settings) return;
+    setSettingsSaving(true);
+    setError(null);
+    setInfo(null);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || 'Cannot save bot messages');
+      } else {
+        setSettings(data);
+        setInfo('Bot messages updated successfully.');
+      }
+    } catch (e) {
+      console.error(e);
+      setError('Cannot save bot messages');
+    } finally {
+      setSettingsSaving(false);
+    }
+  };
+
   return (
     <main
       style={{
@@ -113,54 +167,8 @@ export default function AdminPage() {
       >
         <h1 style={{ marginBottom: '0.5rem' }}>Admin panel</h1>
         <p style={{ marginBottom: '1.5rem' }}>
-          Users list, CSV export and bulk messages.
+          Users list, CSV export, bulk messages and bot text settings.
         </p>
-
-        <div
-          style={{
-            display: 'flex',
-            gap: '0.75rem',
-            marginBottom: '1rem',
-            flexWrap: 'wrap'
-          }}
-        >
-          <button
-            onClick={fetchUsers}
-            disabled={loading}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.5rem',
-              border: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            {loading ? 'Loading...' : 'Reload users'}
-          </button>
-          <button
-            onClick={handleExport}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.5rem',
-              border: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            Export CSV
-          </button>
-          <button
-            onClick={selectAll}
-            style={{
-              padding: '0.5rem 1rem',
-              borderRadius: '0.5rem',
-              border: 'none',
-              cursor: 'pointer'
-            }}
-          >
-            {selectedIds.length === users.length
-              ? 'Unselect all'
-              : 'Select all'}
-          </button>
-        </div>
 
         {error && (
           <div
@@ -190,6 +198,182 @@ export default function AdminPage() {
           </div>
         )}
 
+        {/* BOT MESSAGES SETTINGS */}
+        <section
+          style={{
+            marginBottom: '1.5rem',
+            padding: '1rem',
+            borderRadius: '0.75rem',
+            border: '1px solid #e2e8f0',
+            background: '#f8fafc'
+          }}
+        >
+          <h2 style={{ marginBottom: '0.5rem' }}>Bot messages</h2>
+          <p
+            style={{
+              marginBottom: '0.75rem',
+              fontSize: '0.9rem',
+              color: '#475569'
+            }}
+          >
+            Bu yerda botning foydalanuvchiga yozadigan matnlarini
+            o&apos;zgartirasiz.
+          </p>
+
+          {settingsLoading && !settings ? (
+            <p>Loading bot messages...</p>
+          ) : settings ? (
+            <>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.9rem',
+                  marginBottom: '0.25rem'
+                }}
+              >
+                1. Birinchi xabar (ism so&apos;rash):
+              </label>
+              <textarea
+                value={settings.greetingText}
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    prev
+                      ? { ...prev, greetingText: e.target.value }
+                      : prev
+                  )
+                }
+                rows={2}
+                style={{
+                  width: '100%',
+                  borderRadius: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  border: '1px solid #cbd5f5',
+                  marginBottom: '0.75rem'
+                }}
+              />
+
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.9rem',
+                  marginBottom: '0.25rem'
+                }}
+              >
+                2. Telefon raqamini so&apos;rash xabari:
+              </label>
+              <textarea
+                value={settings.askPhoneText}
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    prev
+                      ? { ...prev, askPhoneText: e.target.value }
+                      : prev
+                  )
+                }
+                rows={2}
+                style={{
+                  width: '100%',
+                  borderRadius: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  border: '1px solid #cbd5f5',
+                  marginBottom: '0.75rem'
+                }}
+              />
+
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '0.9rem',
+                  marginBottom: '0.25rem'
+                }}
+              >
+                3. Kasbini so&apos;rash xabari:
+              </label>
+              <textarea
+                value={settings.askJobText}
+                onChange={(e) =>
+                  setSettings((prev) =>
+                    prev
+                      ? { ...prev, askJobText: e.target.value }
+                      : prev
+                  )
+                }
+                rows={2}
+                style={{
+                  width: '100%',
+                  borderRadius: '0.5rem',
+                  padding: '0.5rem 0.75rem',
+                  border: '1px solid #cbd5f5',
+                  marginBottom: '0.75rem'
+                }}
+              />
+
+              <button
+                onClick={handleSaveSettings}
+                disabled={settingsSaving}
+                style={{
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.5rem',
+                  border: 'none',
+                  cursor: 'pointer'
+                }}
+              >
+                {settingsSaving ? 'Saving...' : 'Save bot messages'}
+              </button>
+            </>
+          ) : (
+            <p>Could not load bot settings.</p>
+          )}
+        </section>
+
+        {/* CONTROLS */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '0.75rem',
+            marginBottom: '1rem',
+            flexWrap: 'wrap'
+          }}
+        >
+          <button
+            onClick={fetchUsers}
+            disabled={loadingUsers}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {loadingUsers ? 'Loading users...' : 'Reload users'}
+          </button>
+          <button
+            onClick={handleExport}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            Export CSV
+          </button>
+          <button
+            onClick={selectAll}
+            style={{
+              padding: '0.5rem 1rem',
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer'
+            }}
+          >
+            {selectedIds.length === users.length
+              ? 'Unselect all'
+              : 'Select all'}
+          </button>
+        </div>
+
+        {/* MESSAGE SENDER */}
         <section style={{ marginBottom: '1.5rem' }}>
           <h2 style={{ marginBottom: '0.5rem' }}>Send message</h2>
           <textarea
@@ -222,6 +406,7 @@ export default function AdminPage() {
           </p>
         </section>
 
+        {/* USERS TABLE */}
         <section>
           <h2 style={{ marginBottom: '0.5rem' }}>Users</h2>
           {users.length === 0 ? (
@@ -271,7 +456,9 @@ export default function AdminPage() {
                     <th style={{ padding: '0.5rem', textAlign: 'left' }}>
                       Phone
                     </th>
-                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>Job</th>
+                    <th style={{ padding: '0.5rem', textAlign: 'left' }}>
+                      Job
+                    </th>
                     <th style={{ padding: '0.5rem', textAlign: 'left' }}>
                       Created
                     </th>
