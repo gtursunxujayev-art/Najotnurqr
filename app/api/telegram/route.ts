@@ -134,31 +134,22 @@ export async function POST(req: NextRequest) {
       }
 
       case 'ASK_JOB': {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { job: text, step: 'DONE' }
-        });
+  user = await prisma.user.update({
+    where: { id: user.id },
+    data: { job: text, step: 'DONE' }
+  });
 
-        // 👇 HERE we change QR content to simple text
-        // Variant 1: two lines with labels (recommended)
-        const qrText = `${user.name},${user.phone}`;
+  // SIMPLE, SCANNER-FRIENDLY TEXT
+  const qrText = `${user.name},${user.phone}`;
 
-        // If you prefer comma for Google Sheets, use this instead:
-        // const qrText = `${user.name},${user.phone}`;
+  // LOW-DENSITY, SCANNER-FRIENDLY QR
+  const qrUrl = buildQrUrl(qrText);
 
-        const qrUrl = buildQrUrl(qrText);
+  await sendTelegramMessage(chatId, "Rahmat! Mana sizning QR-kodingiz:");
+  await sendTelegramPhoto(chatId, qrUrl, `QR matni:\n${qrText}`);
+  break;
+}
 
-        await sendTelegramMessage(
-          chatId,
-          'Rahmat! Mana sizning QR-kodingiz:'
-        );
-        await sendTelegramPhoto(
-          chatId,
-          qrUrl,
-          `QR ichidagi matn:\n${qrText}`
-        );
-        break;
-      }
 
       case 'DONE': {
         await sendTelegramMessage(
