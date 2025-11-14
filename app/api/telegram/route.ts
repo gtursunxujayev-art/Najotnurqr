@@ -11,7 +11,8 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-async function getOrCreateUser(telegramId: number, username: string | null) {
+// Helper: get or create user, telegramId is BIGINT now
+async function getOrCreateUser(telegramId: bigint, username: string | null) {
   let existing = await prisma.user.findUnique({
     where: { telegramId }
   });
@@ -30,11 +31,14 @@ async function getOrCreateUser(telegramId: number, username: string | null) {
     });
     return created;
   } catch (err: any) {
+    // If parallel request created same telegramId (unique), read again
     if (
       err instanceof Prisma.PrismaClientKnownRequestError &&
       err.code === 'P2002'
     ) {
-      const again = await prisma.user.findUnique({ where: { telegramId } });
+      const again = await prisma.user.findUnique({
+        where: { telegramId }
+      });
       if (again) return again;
     }
     throw err;
@@ -72,17 +76,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const chatId: number = chat.id;
-  const telegramId: number = from.id;
+  const chatId: number = chat.id; // okay as number for sendMessage
+  // 👉 telegramId MUST be bigint for Prisma:
+  const telegramId: bigint = BigInt(from.id);
   const username: string | null = from.username ?? null;
   const textRaw: string =
     typeof message.text === 'string' ? message.text.trim() : '';
 
   try {
-    // Load settings (texts)
     const settings = await getBotSettings();
 
+    // ========================
     // /start → reset flow
+    // ========================
     if (textRaw === '/start') {
       let user = await prisma.user.findUnique({ where: { telegramId } });
 
@@ -131,6 +137,7 @@ export async function POST(req: NextRequest) {
 
     const text = textRaw;
 
+    // If no text (photo, sticker, contact, etc.)
     if (!text) {
       await sendTelegramMessage(
         chatId,
@@ -139,6 +146,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ========================
+    // Step-by-step flow
+    // ========================
     switch (user.step) {
       case 'ASK_NAME': {
         user = await prisma.user.update({
@@ -166,6 +176,7 @@ export async function POST(req: NextRequest) {
           data: { job: text, step: 'DONE' }
         });
 
+        // For scanner + Google Sheets: "Name,Phone"
         const qrText = `${user.name},${user.phone}`;
         const qrUrl = buildQrUrl(qrText);
 
@@ -198,10 +209,9 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json({ ok: true });
-    } catch (err: any) {
+  } catch (err: any) {
     console.error('Prisma / bot logic error:', err);
 
-    // Extract short debug info
     const code = err?.code || 'NO_CODE';
     const msg =
       typeof err?.message === 'string'
