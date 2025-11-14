@@ -7,15 +7,28 @@ if (!TOKEN) {
 const API_URL = TOKEN ? `https://api.telegram.org/bot${TOKEN}` : '';
 
 export async function sendTelegramMessage(chatId: number, text: string) {
-  if (!TOKEN) return;
-  await fetch(`${API_URL}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text
-    })
-  });
+  if (!TOKEN || !API_URL) {
+    console.error('Cannot sendTelegramMessage: TOKEN is missing');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text
+      })
+    });
+
+    const data = await res.json();
+    if (!data.ok) {
+      console.error('Telegram sendMessage error:', data);
+    }
+  } catch (e) {
+    console.error('Telegram sendMessage fetch error:', e);
+  }
 }
 
 export async function sendTelegramPhoto(
@@ -23,16 +36,29 @@ export async function sendTelegramPhoto(
   photoUrl: string,
   caption?: string
 ) {
-  if (!TOKEN) return;
-  await fetch(`${API_URL}/sendPhoto`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: chatId,
-      photo: photoUrl,
-      caption
-    })
-  });
+  if (!TOKEN || !API_URL) {
+    console.error('Cannot sendTelegramPhoto: TOKEN is missing');
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API_URL}/sendPhoto`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        photo: photoUrl,
+        caption
+      })
+    });
+
+    const data = await res.json();
+    if (!data.ok) {
+      console.error('Telegram sendPhoto error:', data);
+    }
+  } catch (e) {
+    console.error('Telegram sendPhoto fetch error:', e);
+  }
 }
 
 /**
