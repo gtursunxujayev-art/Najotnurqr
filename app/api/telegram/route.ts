@@ -27,13 +27,9 @@ export async function POST(req: NextRequest) {
     const username = from.username ?? null;
     const textRaw = (message.text ?? '').trim();
 
-    // ###############################
-    // 1) HANDLE /start
-    // ###############################
+    // /start → reset flow
     if (textRaw === '/start') {
-      let user = await prisma.user.findUnique({
-        where: { telegramId }
-      });
+      let user = await prisma.user.findUnique({ where: { telegramId } });
 
       if (!user) {
         user = await prisma.user.create({
@@ -63,12 +59,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // ###############################
-    // 2) Ensure user exists
-    // ###############################
-    let user = await prisma.user.findUnique({
-      where: { telegramId }
-    });
+    // ensure user exists
+    let user = await prisma.user.findUnique({ where: { telegramId } });
 
     if (!user) {
       user = await prisma.user.create({
@@ -86,7 +78,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Always keep username updated
     if (user.username !== username) {
       await prisma.user.update({
         where: { id: user.id },
@@ -96,67 +87,70 @@ export async function POST(req: NextRequest) {
 
     const text = textRaw;
 
-    // ###############################
-    // 3) Step-by-step flow
-    // ###############################
     switch (user.step) {
       case 'ASK_NAME': {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: {
-            name: text,
-            step: 'ASK_PHONE'
-          }
+          data: { name: text, step: 'ASK_PHONE' }
         });
 
-        await sendTelegramMessage(chatId, "Telefon raqamingizni kiriting (masalan: +99890xxxxxxx):");
+        await sendTelegramMessage(
+          chatId,
+          "Telefon raqamingizni kiriting (masalan: +99890xxxxxxx):"
+        );
         break;
       }
 
       case 'ASK_PHONE': {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: {
-            phone: text,
-            step: 'ASK_JOB'
-          }
+          data: { phone: text, step: 'ASK_JOB' }
         });
 
-        await sendTelegramMessage(chatId, "Kasbingiz yoki nima ish qilishingizni yozing:");
+        await sendTelegramMessage(
+          chatId,
+          "Kasbingiz yoki nima ish qilishingizni yozing:"
+        );
         break;
       }
 
       case 'ASK_JOB': {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: {
-            job: text,
-            step: 'DONE'
-          }
+          data: { job: text, step: 'DONE' }
         });
 
         const qrText = `${user.name} | ${user.phone}`;
         const qrUrl = buildQrUrl(qrText);
 
         await sendTelegramMessage(chatId, "Rahmat! Mana sizning QR-kodingiz:");
-        await sendTelegramPhoto(chatId, qrUrl, `QR ichidagi ma'lumot: ${user.name} | ${user.phone}`);
+        await sendTelegramPhoto(
+          chatId,
+          qrUrl,
+          `QR ichidagi ma'lumot: ${user.name} | ${user.phone}`
+        );
         break;
       }
 
       case 'DONE': {
-        await sendTelegramMessage(chatId, "Siz allaqachon roʻyxatdan oʻtgansiz. Qayta boshlash uchun /start yuboring.");
+        await sendTelegramMessage(
+          chatId,
+          "Siz allaqachon roʻyxatdan oʻtgansiz. Qayta boshlash uchun /start yuboring."
+        );
         break;
       }
 
       default: {
-        await sendTelegramMessage(chatId, "Boshlash uchun /start buyrugʻini yuboring.");
+        await sendTelegramMessage(
+          chatId,
+          "Boshlash uchun /start buyrugʻini yuboring."
+        );
       }
     }
 
     return NextResponse.json({ ok: true });
-
   } catch (err) {
-    console.error("Telegram webhook error:", err);
-    return NextResponse.json({ ok: true }); // avoid retries
+    console.error('Telegram webhook error:', err);
+    return NextResponse.json({ ok: true });
   }
 }
