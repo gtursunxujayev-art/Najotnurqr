@@ -3,13 +3,14 @@ import { prisma } from '@/lib/prisma';
 import { buildQrUrl, sendTelegramMessage, sendTelegramPhoto } from '@/lib/telegram';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 export async function POST(req: NextRequest) {
   const update = await req.json();
 
   const message = update.message ?? update.edited_message;
   if (!message) {
-    // Ignore non-message updates
     return NextResponse.json({ ok: true });
   }
 
@@ -25,7 +26,6 @@ export async function POST(req: NextRequest) {
   const username: string | null = from.username ?? null;
   const textRaw: string = (message.text ?? '').trim();
 
-  // /start always resets flow
   if (textRaw === '/start') {
     let user = await prisma.user.findUnique({
       where: { telegramId }
@@ -59,7 +59,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Ensure user exists
   let user = await prisma.user.findUnique({
     where: { telegramId }
   });
@@ -83,7 +82,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Always keep username updated
   if (user.username !== username) {
     user = await prisma.user.update({
       where: { id: user.id },
@@ -95,7 +93,6 @@ export async function POST(req: NextRequest) {
 
   switch (user.step) {
     case 'ASK_NAME': {
-      // Save name
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -113,7 +110,6 @@ export async function POST(req: NextRequest) {
     }
 
     case 'ASK_PHONE': {
-      // (Optional) simple validation, but we just save what user sends
       user = await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -153,7 +149,6 @@ export async function POST(req: NextRequest) {
     }
 
     case 'DONE': {
-      // After finished, if user writes again: tell them they can restart
       await sendTelegramMessage(
         chatId,
         'Siz allaqachon roʻyxatdan oʻtgansiz. Qayta kiritish uchun /start buyrugʻini yuboring.'
