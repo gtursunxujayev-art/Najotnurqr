@@ -1,0 +1,27 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("postgresql://neondb_owner:npg_VoCWwlsreB49@ep-cold-silence-a4y0ac9m-pooler.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require")
+}
+
+enum Step {
+  ASK_NAME
+  ASK_PHONE
+  ASK_JOB
+  DONE
+}
+
+model User {
+  id         Int      @id @default(autoincrement())
+  telegramId Int      @unique
+  username   String?
+  name       String
+  phone      String
+  job        String
+  step       Step     @default(ASK_NAME)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
